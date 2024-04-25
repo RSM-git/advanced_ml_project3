@@ -75,7 +75,7 @@ class MoGPrior(nn.Module):
 
 
 
-class GaussianEncoder(nn.Module):
+class GraphGaussianEncoder(nn.Module):
     def __init__(self, encoder_net):
         """
         Define a Gaussian encoder distribution based on a given encoder network.
@@ -86,7 +86,7 @@ class GaussianEncoder(nn.Module):
            feature_dim1, feature_dim2)` and output a tensor of dimension
            `(batch_size, 2M)`, where M is the dimension of the latent space.
         """
-        super(GaussianEncoder, self).__init__()
+        super(GraphGaussianEncoder, self).__init__()
         self.encoder_net = encoder_net
 
     def forward(self, x):
@@ -97,7 +97,7 @@ class GaussianEncoder(nn.Module):
         x: [torch.Tensor] 
            A tensor of dimension `(batch_size, feature_dim1, feature_dim2)`
         """
-        mean, std = torch.chunk(self.encoder_net(x), 2, dim=-1)
+        mean, std = torch.chunk(self.encoder_net(x.x, x.edge_index, x.batch), 2, dim=-1)
         return td.Independent(td.Normal(loc=mean, scale=torch.exp(std)), 1)
 
 class GaussianDecoder(nn.Module):
@@ -141,7 +141,6 @@ class BernoulliDecoder(nn.Module):
         """
         super(BernoulliDecoder, self).__init__()
         self.decoder_net = decoder_net
-        self.std = nn.Parameter(torch.ones(28, 28)*0.5, requires_grad=True)
 
     def forward(self, z):
         """
@@ -218,11 +217,12 @@ class VAE(nn.Module):
            n_samples: [int]
            Number of samples to use for the Monte Carlo estimate of the ELBO.
         """
-        breakpoint()
+
         q = self.encoder(x)
         z = q.rsample()
-        breakpoint()
-        elbo = torch.mean(self.decoder(z).log_prob(x) - monte_carlo_kl(q, self.prior(), 100), dim=0)
+
+        targets = x.adj.flatten(start_dim=1)
+        elbo = torch.mean(self.decoder(z).log_prob(targets) - monte_carlo_kl(q, self.prior(), 100), dim=0)
         return elbo, z
 
     def sample(self, n_samples=1):
@@ -247,17 +247,6 @@ class VAE(nn.Module):
         elbo, z = self.elbo(x)
         return -elbo
 
-    def forward_retain_posterior(self, x):
-        """
-        Compute the negative ELBO and the posterior samples for a batch of data
-
-        Parameters:
-        x: [torch.Tensor] 
-           A tensor of dimension `(batch_size, feature_dim1, feature_dim2)`
-        """
-        elbo, z = self.elbo(x)
-
-        return -elbo, z
 
 def test(model, data_loader, device):
     """
