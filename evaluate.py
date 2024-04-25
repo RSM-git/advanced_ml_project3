@@ -3,7 +3,10 @@ import data
 import numpy.typing as npt
 from collections import defaultdict
 from torch_geometric.utils import to_networkx
-from erdos_renyi import generate_graph_er
+from erdos_renyi import generate_graph_er, node_stats, sample_empirical_graph
+import torch
+from torch_geometric.loader import DataLoader
+import matplotlib.pyplot as plt
 
 
 class Evaluator:
@@ -32,7 +35,7 @@ class Evaluator:
     def get_novelty(self) -> float:
         n_novel = 0
         for hash in self.eval_hashes:
-            if hash in self.train_hashes_set:
+            if hash not in self.train_hashes_set:
                 n_novel += 1
         return n_novel / self.n_eval
     
@@ -46,17 +49,70 @@ class Evaluator:
 
         novel_and_unique = 0
         for hash in self.eval_hashes:
-            novel_and_unique += (hash in self.train_hashes) and (eval_counts[hash] == 1)
+            if hash not in self.train_hashes_set:
+                if eval_counts[hash] == 1:
+                    novel_and_unique += 1
         
         return novel_and_unique / self.n_eval
 
+def get_degree_counts(graphs: list[nx.Graph]) -> list:
+    degrees = []
+    for g in graphs:
+        d = g.degree()
+        for t in d:
+            degrees.append(t[1])
+    return degrees
+
+def get_ccoef_counts(graphs: list[nx.Graph]) -> list:
+    ccoefs = []
+    for g in graphs:
+        g_coefs = nx.clustering(g)
+        ccoefs.extend(g_coefs.values())
+    return ccoefs
+
+def get_centralities(graphs: list[nx.Graph]) -> list:
+    centralities = []
+    for g in graphs:
+        centrality = nx.degree_centrality(g)
+        for t in centrality.values():
+            centralities.append(t)
+    return centralities
+
+
+def plot_graph_stats(degrees, ccoefs, centralities) -> None:
+    fig, axs = plt.subplots(3)
+    degrees = degrees
+    axs[0].hist(degrees, bins=20)
+    axs[0].set_title("Degree distribution")
+    axs[1].hist(ccoefs, bins=20)
+    axs[1].set_title("Clustering coefficient distribution")
+    axs[2].hist(centralities, bins=100)
+    axs[2].set_title("Degree centrality distribution")
+    plt.show()
+
 if __name__ == "__main__":
     # evaluate baseline
-    base_graphs = [nx.from_numpy_array(A) for A in base_A]
+    train, val, test = data.get_datasets()
+    train_loader = DataLoader(train, batch_size=1)
+    node_distribution, densities = node_stats(train_loader)
+    N, edge_probability = sample_empirical_graph(n_samples=1000, node_distribution=node_distribution, densities=densities)
+    As = []
+    for n, prob in zip(N, edge_probability):
+        A = generate_graph_er(n, prob)
+        A = A.numpy()
+        A = A.astype(int)
+        As.append(A)
+    base_graphs = [nx.from_numpy_array(A) for A in As]
 
-    evaluator = Evaluator(base_graphs)
-    novelty = evaluator.get_novelty()
-    uniqueness = evaluator.get_uniqueness()
-    novel_and_unique = evaluator.get_novel_and_unique()
-    print("Baseline statistics:")
-    print(f"Novelty: {novelty}, Uniqueness: {uniqueness}, Novel and Unique: {novel_and_unique}")
+    # evaluator = Evaluator(base_graphs)
+    # novelty = evaluator.get_novelty()
+    # uniqueness = evaluator.get_uniqueness()
+    # novel_and_unique = evaluator.get_novel_and_unique()
+    # print("Baseline statistics:")
+    # print(f"Novelty: {novelty}, Uniqueness: {uniqueness}, Novel and Unique: {novel_and_unique}")
+
+    degrees = get_degree_counts(base_graphs)
+    ccoefs = get_ccoef_counts(base_graphs)
+    centralities = get_centralities(base_graphs)
+
+    plot_graph_stats(degrees, ccoefs, centralities)
