@@ -1,4 +1,5 @@
 import networkx as nx
+import numpy as np
 import data
 import numpy.typing as npt
 from collections import defaultdict
@@ -8,7 +9,6 @@ import torch
 from torch_geometric.loader import DataLoader
 import matplotlib.pyplot as plt
 
-
 class Evaluator:
     """
     params:
@@ -16,7 +16,7 @@ class Evaluator:
     """
     def __init__(self, graphs: list[nx.Graph]):
         self.graphs = graphs
-        self.train_graphs, _, _ = data.get_datasets()
+        self.train_graphs = data.get_datasets()
         self.convert_train_graphs()
         self.n_train = len(self.train_graphs)
         self.n_eval = len(graphs)
@@ -79,20 +79,19 @@ def get_centralities(graphs: list[nx.Graph]) -> list:
     return centralities
 
 
-def plot_graph_stats(degrees, ccoefs, centralities) -> None:
-    fig, axs = plt.subplots(3)
-    degrees = degrees
-    axs[0].hist(degrees, bins=20)
-    axs[0].set_title("Degree distribution")
-    axs[1].hist(ccoefs, bins=20)
-    axs[1].set_title("Clustering coefficient distribution")
-    axs[2].hist(centralities, bins=100)
-    axs[2].set_title("Degree centrality distribution")
+def plot_degree_distribution(empirical_degrees: list, baseline_degrees: list, vae_degrees: list):
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    all_degrees = [empirical_degrees, baseline_degrees, vae_degrees]
+    max_degree = max([max(d) for d in all_degrees])
+    for i, degrees in enumerate(all_degrees):
+        axes[i].hist(degrees, bins=np.arange(0, max_degree+1, 1), rwidth=0.5)
     plt.show()
+
+
 
 if __name__ == "__main__":
     # evaluate baseline
-    train, val, test = data.get_datasets()
+    train = data.get_dataset()
     train_loader = DataLoader(train, batch_size=1)
     node_distribution, densities = node_stats(train_loader)
     N, edge_probability = sample_empirical_graph(n_samples=1000, node_distribution=node_distribution, densities=densities)
@@ -111,8 +110,14 @@ if __name__ == "__main__":
     # print("Baseline statistics:")
     # print(f"Novelty: {novelty}, Uniqueness: {uniqueness}, Novel and Unique: {novel_and_unique}")
 
-    degrees = get_degree_counts(base_graphs)
-    ccoefs = get_ccoef_counts(base_graphs)
-    centralities = get_centralities(base_graphs)
+    base_degrees = get_degree_counts(base_graphs)
+    base_ccoefs = get_ccoef_counts(base_graphs)
+    base_centralities = get_centralities(base_graphs)
 
-    plot_graph_stats(degrees, ccoefs, centralities)
+    train_graphs = [to_networkx(g, to_undirected=True) for g in train]
+    train_degrees = get_degree_counts(train_graphs)
+    
+
+    vae_degrees = [1, 2]
+    plot_degree_distribution(base_degrees, train_degrees, vae_degrees)
+
