@@ -3,6 +3,7 @@ import data
 import numpy.typing as npt
 from collections import defaultdict
 from torch_geometric.utils import to_networkx
+from erdos_renyi import generate_graph_er
 
 
 class Evaluator:
@@ -50,4 +51,12 @@ class Evaluator:
         return novel_and_unique / self.n_eval
 
 if __name__ == "__main__":
-    
+    # evaluate baseline
+    base_graphs = [nx.from_numpy_array(A) for A in base_A]
+
+    evaluator = Evaluator(base_graphs)
+    novelty = evaluator.get_novelty()
+    uniqueness = evaluator.get_uniqueness()
+    novel_and_unique = evaluator.get_novel_and_unique()
+    print("Baseline statistics:")
+    print(f"Novelty: {novelty}, Uniqueness: {uniqueness}, Novel and Unique: {novel_and_unique}")
