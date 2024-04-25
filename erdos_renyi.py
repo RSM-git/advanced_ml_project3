@@ -4,7 +4,7 @@ from torch_geometric.datasets import TUDataset
 from torch_geometric.loader import DataLoader
 
 
-dataset = TUDataset(root='./data/', name='MUTAG')
+dataset = TUDataset(root='/zhome/c7/2/208212/classes/adv_ml/advanced_ml_e8/data', name='MUTAG')
 
 rng = torch.Generator().manual_seed(0)
 train_dataset, validation_dataset, test_dataset = random_split(dataset, (100, 44, 44), generator=rng)
@@ -16,4 +16,4 @@ validation_loader = DataLoader(validation_dataset, batch_size=44)
 
 test_loader = DataLoader(test_dataset, batch_size=44)
 
-
+breakpoint()
