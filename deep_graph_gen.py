@@ -9,8 +9,11 @@ from torch_geometric.datasets import TUDataset
 from torch_geometric.utils import to_dense_adj
 from torch_geometric.loader import DataLoader
 
+import matplotlib.pyplot as plt
+
 from graph_convolution import SimpleGraphConv
 from vae import VAE, BernoulliDecoder, GraphGaussianEncoder, GaussianPrior
+from graph_utils import draw_graph, indices_no_diagonal, tri_to_adj_matrix
 
 MAX_GRAPH_NODES = 29 # maximum graph size in the training set
 
@@ -22,13 +25,16 @@ def single_depth_graph_generator(node_feature_dim, max_graph_nodes, latent_dim, 
     - max_graph_nodes is the length of the adjacency matrix to compute 
     - filter_length is length of convolutional filter (how long are the paths each node should pay attention to)
     """
+
+    lower_triangle_length = (max_graph_nodes) * (max_graph_nodes - 1) // 2 # does not include the diagonal
+
     encoder_net = SimpleGraphConv(node_feature_dim, 2*latent_dim, filter_length)
     decoder_net = nn.Sequential(
             nn.Linear(latent_dim, intermediate_dim),
             nn.ReLU(),
             nn.Linear(intermediate_dim, intermediate_dim),
             nn.ReLU(),
-            nn.Linear(intermediate_dim, max_graph_nodes ** 2 )
+            nn.Linear(intermediate_dim, lower_triangle_length )
             )
     
     encoder = GraphGaussianEncoder(encoder_net).to(device)
@@ -40,19 +46,26 @@ def single_depth_graph_generator(node_feature_dim, max_graph_nodes, latent_dim, 
     return model
 
 
-def get_MUTAG_train_test(root):
+def get_MUTAG_dataloader(root):
     dataset = TUDataset(root=root, name='MUTAG')
 
-    rng = torch.Generator().manual_seed(0)
-    train_dataset, validation_dataset, test_dataset = random_split(dataset, (100, 44, 44), generator=rng)
+    train_loader = DataLoader(dataset, batch_size=100)
 
-    train_loader = DataLoader(train_dataset, batch_size=100)
-    validation_loader = DataLoader(validation_dataset, batch_size=44)
-    test_loader = DataLoader(test_dataset, batch_size=44)
+    return train_loader
 
-    return train_loader, validation_loader, test_loader
 
-def train(model, optimizer, data_loader, epochs, device):
+def padded_lower_triangular(edge_index, batch, max_graph_nodes):
+    adj = to_dense_adj(edge_index, batch)
+    _, h, w = adj.shape
+    adj = F.pad(adj, (0,  max_graph_nodes - h, 0,  max_graph_nodes- h))
+    _, h, w = adj.shape
+    index_r, index_c = indices_no_diagonal(torch.triu_indices(h, w))
+    
+    adj_tri = adj[:, index_r, index_c]
+
+    return adj_tri
+
+def train(model, optimizer, data_loader, epochs, device, save_path = None):
     """
     Train a VAE model.
 
@@ -78,11 +91,8 @@ def train(model, optimizer, data_loader, epochs, device):
             running_loss = 0.0
             for data in data_loader:
                 x = next(iter(data_loader))
-                adj = to_dense_adj(x.edge_index, x.batch)
 
-                target_size = MAX_GRAPH_NODES - adj.shape[1]
-                adj = F.pad(adj, (0,  target_size, 0, target_size))
-                x.adj = adj
+                x.adj = padded_lower_triangular(x.edge_index, x.batch, MAX_GRAPH_NODES)
                 x = x.to(device)
                 optimizer.zero_grad()
                 loss = model(x)
@@ -98,21 +108,54 @@ def train(model, optimizer, data_loader, epochs, device):
             pbar.set_description(f"epoch={epoch}, loss={epoch_loss:.1f}")
             training_losses.append(epoch_loss)
 
+    plt.plot(training_losses)
+    plt.savefig('train_loss.png')
+    if save_path is not None:
+        torch.save(model.state_dict(), save_path)
+
+def sample(model_weight_path, n_samples, node_feature_dim, max_graph_nodes, latent_dim, convolutional_filter_length, fig_path = 'vae_graph.png', device='cuda'):
+    model = single_depth_graph_generator(node_feature_dim, max_graph_nodes,latent_dim, convolutional_filter_length)
+    
+    state_dict = torch.load(model_weight_path, map_location=torch.device(device))
+    model.load_state_dict(state_dict)
+    with torch.no_grad():
+        samples = model.sample(n_samples).cpu()
+
+    B, _ = samples.shape
+    adjs = tri_to_adj_matrix(samples, max_graph_nodes)
+    draw_graph(adjs[0])
+    plt.savefig(fig_path)
+
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', type=str, default='train', choices=['train', 'sample'], help='what to do when running the script (default: %(default)s)')
+    parser.add_argument('--weights', type=str, default='models/vae_basic.pt')
+    args = parser.parse_args()
+
     MUTAG_DATASET_ROOT= '/zhome/c7/2/208212/classes/adv_ml/advanced_ml_e8/data' # './data'
+
     NODE_FEATURE_DIM = 7
     LATENT_DIM = 4
-    convolutional_filter_length = 3
+    CONVOLUTIONAL_FILTER_LENGTH = 3
+
     epochs = 500
     device = 'cuda'
-    
 
-    train_loader, val_loader, test_loader = get_MUTAG_train_test(MUTAG_DATASET_ROOT)
-    model = single_depth_graph_generator(NODE_FEATURE_DIM, MAX_GRAPH_NODES,LATENT_DIM, convolutional_filter_length)
+    if args.mode == 'train':
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=.001)
-    
-    train(model, optimizer, train_loader, epochs, device)
+        
+        train_loader = get_MUTAG_dataloader(MUTAG_DATASET_ROOT)
+        model = single_depth_graph_generator(NODE_FEATURE_DIM, MAX_GRAPH_NODES,LATENT_DIM, CONVOLUTIONAL_FILTER_LENGTH)
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=.001)
+        
+        train(model, optimizer, train_loader, epochs, device=device, save_path=args.weights)
+    elif args.mode == 'sample':
+        weight_path = args.weights
+        sample(weight_path, 1, NODE_FEATURE_DIM, MAX_GRAPH_NODES,LATENT_DIM, CONVOLUTIONAL_FILTER_LENGTH)
 
 if __name__=='__main__':
+
+
     main()

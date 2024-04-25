@@ -17,8 +17,6 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-
-
 class GaussianPrior(nn.Module):
     def __init__(self, M):
         """
@@ -224,6 +222,8 @@ class VAE(nn.Module):
         targets = x.adj.flatten(start_dim=1)
         elbo = torch.mean(self.decoder(z).log_prob(targets) - monte_carlo_kl(q, self.prior(), 100), dim=0)
         return elbo, z
+
+
 
     def sample(self, n_samples=1):
         """

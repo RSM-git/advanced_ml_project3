@@ -7,6 +7,7 @@ from torch_geometric.utils import to_dense_adj
 
 import numpy as np
 import networkx as nx
+from graph_utils import draw_graph
 
 import matplotlib.pyplot as plt
 
@@ -64,11 +65,6 @@ def generate_graph_er(num_nodes, edge_probability):
     A = A + A.T
     return A
 
-
-def draw_graph(A):
-    G = nx.from_numpy_array(A.numpy())
-    nx.draw(G, with_labels=True)
-    plt.show()
 
 
 if __name__ == '__main__':
