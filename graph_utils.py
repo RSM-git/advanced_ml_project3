@@ -33,5 +33,8 @@ def tri_to_adj_matrix(tris, n_nodes):
 
 def draw_graph(A):
     G = nx.from_numpy_array(A.numpy())
-    fig =nx.draw(G, with_labels=True)
+    fig = nx.draw(G, with_labels=True)
     return fig    
+
+def save_graph(A):
+    np.save('graph.npy', A.numpy())
