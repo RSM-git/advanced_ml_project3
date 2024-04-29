@@ -37,4 +37,4 @@ def draw_graph(A):
     return fig    
 
 def save_graph(A):
-    np.save('graph.npy', A.numpy())
+    np.save('graphs.npy', A.numpy())

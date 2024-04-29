@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from graph_convolution import SimpleGraphConv
 from vae import VAE, BernoulliDecoder, GraphGaussianEncoder, GaussianPrior
-from graph_utils import draw_graph, indices_no_diagonal, tri_to_adj_matrix
+from graph_utils import draw_graph, indices_no_diagonal, tri_to_adj_matrix, save_graph
 
 MAX_GRAPH_NODES = 28 # maximum graph size in the training set
 
@@ -124,8 +124,13 @@ def sample(model_weight_path, n_samples, node_feature_dim, max_graph_nodes, late
 
     B, _ = samples.shape
     adjs = tri_to_adj_matrix(samples, max_graph_nodes)
-    draw_graph(adjs[0])
-    plt.savefig(fig_path)
+
+    match n_samples
+        case 1:
+            draw_graph(adjs[0])
+            plt.savefig(fig_path)
+        case _:
+            save_graph(adjs)
 
 
 def main():
@@ -133,9 +138,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', type=str, default='train', choices=['train', 'sample'], help='what to do when running the script (default: %(default)s)')
     parser.add_argument('--weights', type=str, default='models/vae_basic.pt')
+    parser.add_argument("--n_samples", type=int, default=1, help="number of samples to generate")
     args = parser.parse_args()
 
-    MUTAG_DATASET_ROOT= './data'
+    MUTAG_DATASET_ROOT= '/data'
 
     NODE_FEATURE_DIM = 7
     LATENT_DIM = 4
@@ -146,14 +152,14 @@ def main():
 
     if args.mode == 'train':
         train_loader = get_MUTAG_dataloader(MUTAG_DATASET_ROOT)
-        model = single_depth_graph_generator(NODE_FEATURE_DIM, MAX_GRAPH_NODES,LATENT_DIM, CONVOLUTIONAL_FILTER_LENGTH)
+        model = single_depth_graph_generator(NODE_FEATURE_DIM, MAX_GRAPH_NODES, LATENT_DIM, CONVOLUTIONAL_FILTER_LENGTH)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=.001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=5e-3)
         
         train(model, optimizer, train_loader, epochs, device=device, save_path=args.weights)
     elif args.mode == 'sample':
         weight_path = args.weights
-        sample(weight_path, 1, NODE_FEATURE_DIM, MAX_GRAPH_NODES,LATENT_DIM, CONVOLUTIONAL_FILTER_LENGTH)
+        sample(weight_path, args.n_samples, NODE_FEATURE_DIM, MAX_GRAPH_NODES, LATENT_DIM, CONVOLUTIONAL_FILTER_LENGTH)
 
 
 if __name__=='__main__':
