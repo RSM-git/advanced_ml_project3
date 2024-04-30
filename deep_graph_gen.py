@@ -18,7 +18,7 @@ from graph_utils import draw_graph, indices_no_diagonal, tri_to_adj_matrix, save
 MAX_GRAPH_NODES = 28  # maximum graph size in the training set
 
 
-def single_depth_graph_generator(node_feature_dim, max_graph_nodes, latent_dim, filter_length, intermediate_dim=8,
+def single_depth_graph_generator(node_feature_dim, max_graph_nodes, latent_dim, filter_length, intermediate_dim=512,
                                  device='cuda'):
     """
     Create a vae with a 1-deep graph convolutional network
@@ -149,7 +149,7 @@ def main():
     MUTAG_DATASET_ROOT = './data'
 
     NODE_FEATURE_DIM = 7
-    LATENT_DIM = 8
+    LATENT_DIM = 12
     CONVOLUTIONAL_FILTER_LENGTH = 3
 
     epochs = 5000

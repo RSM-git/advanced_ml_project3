@@ -34,7 +34,7 @@ class SimpleGraphConv(torch.nn.Module):
         self.cached = False
 
 
-    def forward(self, x, edge_index, batch, eigen = False):
+    def forward(self, x, edge_index, batch, eigen = True):
         """Evaluate neural network on a batch of graphs.
 
         Parameters
@@ -65,14 +65,13 @@ class SimpleGraphConv(torch.nn.Module):
         
 
         if eigen:
-            node_state = torch.zeros_like(X)
-            lmbda, U = torch.linalg.eigh(A)
-
-            lmbda = torch.diag_embed(lmbda)
+            eigenvalues, eigenvectors = torch.linalg.eigh(A)
             
+            spectral_node_state = torch.zeros_like(eigenvalues)
             for k in range(self.filter_length):
-                node_state += U.T @ (self.h[k] * torch.linalg.matrix_power(lmbda, k)) @ U @ X
-                
+                spectral_node_state += self.h[k] * eigenvalues ** k
+
+            node_state = eigenvectors @ torch.diag_embed(spectral_node_state) @ eigenvectors.mT @ X
         else:
             node_state = torch.zeros_like(X)
             for k in range(self.filter_length):
