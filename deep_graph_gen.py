@@ -101,9 +101,6 @@ def train(model, optimizer, data_loader, epochs, device, save_path = None):
 
                 running_loss += loss.item()
             
-                if step % 100 == 99:    # every 100 mini-batches...
-                    running_loss = 0 
-
             epoch_loss = running_loss / len(data_loader)
             pbar.set_description(f"epoch={epoch}, loss={epoch_loss:.1f}")
             training_losses.append(epoch_loss)
@@ -114,7 +111,7 @@ def train(model, optimizer, data_loader, epochs, device, save_path = None):
         torch.save(model.state_dict(), save_path)
 
 
-def sample(model_weight_path, n_samples, node_feature_dim, max_graph_nodes, latent_dim, convolutional_filter_length, fig_path = 'vae_graph.png', device='cuda'):
+def sample(model_weight_path, n_samples, node_feature_dim, max_graph_nodes, latent_dim, convolutional_filter_length, save_path = 'vae_graph.png', device='cuda'):
     model = single_depth_graph_generator(node_feature_dim, max_graph_nodes,latent_dim, convolutional_filter_length)
     
     state_dict = torch.load(model_weight_path, map_location=torch.device(device))
@@ -125,12 +122,12 @@ def sample(model_weight_path, n_samples, node_feature_dim, max_graph_nodes, late
     B, _ = samples.shape
     adjs = tri_to_adj_matrix(samples, max_graph_nodes)
 
-    match n_samples
+    match n_samples:
         case 1:
             draw_graph(adjs[0])
-            plt.savefig(fig_path)
+            plt.savefig(save_path)
         case _:
-            save_graph(adjs)
+            save_graph(adjs, save_path)
 
 
 def main():
@@ -139,15 +136,17 @@ def main():
     parser.add_argument('mode', type=str, default='train', choices=['train', 'sample'], help='what to do when running the script (default: %(default)s)')
     parser.add_argument('--weights', type=str, default='models/vae_basic.pt')
     parser.add_argument("--n_samples", type=int, default=1, help="number of samples to generate")
+    parser.add_argument("--fname", type=str, default="graphs.npy", help="filename for saving graph samples")
+    
     args = parser.parse_args()
 
-    MUTAG_DATASET_ROOT= '/data'
+    MUTAG_DATASET_ROOT= './data'
 
     NODE_FEATURE_DIM = 7
-    LATENT_DIM = 4
+    LATENT_DIM = 8
     CONVOLUTIONAL_FILTER_LENGTH = 3
 
-    epochs = 500
+    epochs = 5000
     device = 'cuda'
 
     if args.mode == 'train':
@@ -159,7 +158,7 @@ def main():
         train(model, optimizer, train_loader, epochs, device=device, save_path=args.weights)
     elif args.mode == 'sample':
         weight_path = args.weights
-        sample(weight_path, args.n_samples, NODE_FEATURE_DIM, MAX_GRAPH_NODES, LATENT_DIM, CONVOLUTIONAL_FILTER_LENGTH)
+        sample(weight_path, args.n_samples, NODE_FEATURE_DIM, MAX_GRAPH_NODES, LATENT_DIM, CONVOLUTIONAL_FILTER_LENGTH, save_path=args.fname)
 
 
 if __name__=='__main__':

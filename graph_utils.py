@@ -36,5 +36,5 @@ def draw_graph(A):
     fig = nx.draw(G, with_labels=True)
     return fig    
 
-def save_graph(A):
-    np.save('graphs.npy', A.numpy())
+def save_graph(A, fname):
+    np.save(fname, A.numpy())
